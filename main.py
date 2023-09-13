@@ -75,7 +75,7 @@ def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
     # If already have images, skip
     image_files = [f for f in os.listdir(output_directory) if f.endswith(f".jpg") or f.endswith(f".png")]
     if image_files:
-        print(f"Skip {input_pdf} because already have {len(image_files)} images.")
+        print(f"Skip the pdf because already have {len(image_files)} images.")
         return
 
     # Extract the base name from the input PDF path
@@ -250,8 +250,8 @@ def main():
 
         # Process each PDF file
         targets = []
-        print("# Convert PDF to images")
-        for in_file in pdf_files:
+        print("# Convert PDF to images and Upload to Gyazo")
+        for in_file in tqdm(pdf_files):
             out_dir = get_out_dir(in_file)
             # if skip_existing and os.path.exists(out_dir):
             #     print(f"Output directory `{out_dir}` already exists. Exiting...")
@@ -264,25 +264,21 @@ def main():
             print(f"From `{in_file}` to images...")
             run_pdftocairo(in_file, out_dir, args.resolution, args.format)
             targets.append(out_dir)
-
-        print("# Upload images to Gyazo")
-        for target in targets:
-            upload_images_to_gyazo(target)
+            upload_images_to_gyazo(out_dir)
         
         print("# Get OCR texts")
         for target in targets:
-            get_ocr_texts(get_out_dir(pdf_file))
+            get_ocr_texts(target)
 
         print("# Make Scrapbox JSON")
         for target in targets:
-            make_scrapbox_json(get_out_dir(pdf_file))
+            make_scrapbox_json(target)
 
         print("# Make Total Scrapbox JSON")
         total_pages = []
         data = {"pages": total_pages}
-        for pdf_file in pdf_files:
-            out_dir = get_out_dir(pdf_file)
-            json_path = os.path.join(out_dir, "scrapbox.json")
+        for target in targets:
+            json_path = os.path.join(target, "scrapbox.json")
             with open(json_path) as f:
                 pages = json.load(f)["pages"]
                 total_pages.extend(pages)
