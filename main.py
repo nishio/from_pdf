@@ -9,6 +9,7 @@ import requests
 import re
 import json
 from tqdm import tqdm
+from time import sleep
 
 parser = argparse.ArgumentParser(description="from PDF to Scrapbox")
 parser.add_argument("--in-file", "--in", "-i", type=str, help="input PDF file", required=False)
@@ -16,6 +17,7 @@ parser.add_argument("--resolution", "-r", type=int, default=200, help="Resolutio
 parser.add_argument("--format", "-f", type=str, default='jpeg', choices=['jpeg', 'png'], help="Output format. Default is 'jpeg'.")
 parser.add_argument("--in-dir", type=str, default="in", help="input PDF directory")
 parser.add_argument("--out-dir", type=str, default="out", help="output directory")
+parser.add_argument("--retry", action="store_true", help="retry")
 args = parser.parse_args()
 
 
@@ -47,12 +49,14 @@ def upload_one_image_to_gyazo(image_name, directory):
             open(image_path, 'rb')
         )
     }
-    response = requests.post(url, headers=headers, files=files)
+    while True:
+        response = requests.post(url, headers=headers, files=files)
 
-    if response.status_code == 200:
-        return response.json()
-
-    raise Exception(f"Failed to upload image({response.status_code}): {response.text}")
+        if response.status_code == 200:
+            return response.json()
+        if not args.retry:
+            raise Exception(f"Failed to upload image({response.status_code}): {response.text}")
+        sleep(1)
 
 
 def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
