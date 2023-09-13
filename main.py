@@ -68,6 +68,11 @@ def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
     Returns:
     None
     """
+    # If already have images, skip
+    image_files = [f for f in os.listdir(output_directory) if f.endswith(f".jpg") or f.endswith(f".png")]
+    if image_files:
+        print(f"Skip {input_pdf} because already have {len(image_files)} images.")
+        return
 
     # Extract the base name from the input PDF path
     base_name = os.path.basename(input_pdf)
