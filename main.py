@@ -174,9 +174,6 @@ def get_out_dir(in_file):
 
 def process_one_pdf(in_file):
     out_dir = get_out_dir(in_file)
-    # if skip_existing and os.path.exists(out_dir):
-    #     print(f"Output directory `{out_dir}` already exists. Exiting...")
-    #     return
 
     # Make the directory. The exist_ok=True ensures that the function doesn't
     # raise an error if the directory already exists.
@@ -233,16 +230,38 @@ def main():
         INDIR = args.in_dir
         pdf_files = [os.path.join(INDIR, f) for f in os.listdir(INDIR) if f.endswith(".pdf")]
         pdf_files.sort()
+        print(f"Num PDF files: {len(pdf_files)}")
 
         # Process each PDF file
-        # for pdf_file in pdf_files:
-        #     print(f"Processing `{pdf_file}`...")
-        #     # process_one_pdf(pdf_file, skip_ocr=True)
-        for pdf_file in pdf_files:
-            # upload_images_to_gyazo(get_out_dir(pdf_file))
-            # get_ocr_texts(get_out_dir(pdf_file))
+        targets = []
+        print("# Convert PDF to images")
+        for in_file in pdf_files:
+            out_dir = get_out_dir(in_file)
+            # if skip_existing and os.path.exists(out_dir):
+            #     print(f"Output directory `{out_dir}` already exists. Exiting...")
+            #     continue
+
+            # Make the directory. The exist_ok=True ensures that the function doesn't
+            # raise an error if the directory already exists.
+            os.makedirs(out_dir, exist_ok=True)
+
+            print(f"From `{in_file}` to images...")
+            run_pdftocairo(in_file, out_dir, args.resolution, args.format)
+            targets.append(out_dir)
+
+        print("# Upload images to Gyazo")
+        for target in targets:
+            upload_images_to_gyazo(target)
+        
+        print("# Get OCR texts")
+        for target in targets:
+            get_ocr_texts(get_out_dir(pdf_file))
+
+        print("# Make Scrapbox JSON")
+        for target in targets:
             make_scrapbox_json(get_out_dir(pdf_file))
-        print("Make Total Scrapbox JSON")
+
+        print("# Make Total Scrapbox JSON")
         total_pages = []
         data = {"pages": total_pages}
         for pdf_file in pdf_files:
