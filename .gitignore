@@ -1,3 +1,5 @@
 venv
 in
 out
+.env
+total_scrapbox.json
