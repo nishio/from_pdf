@@ -110,7 +110,15 @@ def upload_images_to_gyazo(directory, ext="jpg"):
     """
     # Get all image files in the directory
     image_files = [f for f in os.listdir(directory) if f.endswith(f".{ext}")]
-    print(f"In {directory}, Num images: {len(image_files)}")
+    print(f"DIR: {directory}, \nNum images: {len(image_files)}")
+
+    # Local storage for Gyazo URLs
+    json_path = os.path.join(directory, "gyazo_info.json")
+    gyazo_info = json.load(open(json_path)) if os.path.exists(json_path) else []
+    if len(gyazo_info) == len(image_files):
+        print(f"Skip it because already uploaded all images.")
+        return
+
 
     # 1: Sort the image files by index
     # Images may be `page-99.jpg` and `page-100.jpg`, so we need to sort by the page number.
@@ -127,8 +135,7 @@ def upload_images_to_gyazo(directory, ext="jpg"):
 
     # Local storage for Gyazo URLs
     gyazo_info = []
-    json_path = os.path.join(directory, "gyazo_info.json")
-    for image_file in image_files:
+    for image_file in tqdm(image_files):
         res = upload_one_image_to_gyazo(image_file, directory)
         res["local_filename"] = image_file
 
