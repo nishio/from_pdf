@@ -184,7 +184,7 @@ def get_out_dir(in_file):
     file_name_without_ext = os.path.splitext(base_name)[0]  # gets "foo"
     
     # Create the new directory path
-    out_dir = os.path.join("out", file_name_without_ext)
+    out_dir = os.path.join(args.out_dir, file_name_without_ext)
     return out_dir
 
 
