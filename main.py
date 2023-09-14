@@ -22,6 +22,7 @@ parser.add_argument("--skip-gyazo", action="store_true", help="Skip Gyazo Upload
 parser.add_argument("--skip-gyazo-upload", action="store_true", help="Skip Gyazo Upload")
 parser.add_argument("--skip-pdf-to-image", action="store_true", help="Skip PDF to Image process")
 # Gyazo sometimes returns 429 error (Too many requests) for long time. In the case, we want to continue other processes first.
+parser.add_argument("--recovery", action="store_true", help="Recovery mode after 429 error")
 
 args = parser.parse_args()
 
@@ -204,7 +205,9 @@ def get_ocr_texts(directory):
                 json.dump(gyazo_info, f, indent=2)
         else:
             print(f"OCR not available for image_id={image_id}")
+            # should wait and retry?
             raise Exception("OCR not available")
+
 
 
 def filename_to_outdir(in_file):
@@ -277,6 +280,15 @@ def make_scrapbox_json(directory):
     with open(out_path, 'w') as f:
         json.dump(scrapbox_json, f, indent=2)
 
+
+def get_pdfs_in_dir():
+    # Get all PDF files in the input directory
+    INDIR = args.in_dir
+    pdf_files = [os.path.join(INDIR, f) for f in os.listdir(INDIR) if f.endswith(".pdf")]
+    pdf_files.sort()
+    return pdf_files
+
+
 def process_pdfs():
     """
     This process is suitable when those PDFs will fit in quota.
@@ -286,9 +298,7 @@ def process_pdfs():
     Because uploading cunsume all quota and we can't get OCR texts.
     """
     # Get all PDF files in the input directory
-    INDIR = args.in_dir
-    pdf_files = [os.path.join(INDIR, f) for f in os.listdir(INDIR) if f.endswith(".pdf")]
-    pdf_files.sort()
+    pdf_files = get_pdfs_in_dir()
     print(f"Num PDF files: {len(pdf_files)}")
 
     # Process each PDF file
@@ -317,6 +327,47 @@ def process_pdfs():
         make_scrapbox_json(target)
 
     print("# Make Total Scrapbox JSON")
+    make_total_scrapbox_json(targets)
+
+
+
+def recovery():
+    """
+    Recovery after "too many requests" error.
+    """
+    # Get all PDF files in the input directory
+    pdf_files = get_pdfs_in_dir()
+
+    # Process each PDF file
+    targets = []
+    for in_file in tqdm(pdf_files):
+        target = filename_to_outdir(in_file)
+        if not os.path.exists(target):
+            # it is not processed yet, no WIP, so skip
+            continue
+
+        image_files = get_images(target)
+        if not image_files:
+            # no images, so no WIP API calls. skip
+            continue
+
+        # Local storage for Gyazo URLs
+        json_path = os.path.join(target, "gyazo_info.json")
+        gyazo_info = json.load(open(json_path)) if os.path.exists(json_path) else []
+        if len(gyazo_info) != len(image_files):
+            # some images are not uploaded
+            print("Uploading", target)
+            upload_images_to_gyazo(target)
+
+        print("Get OCR", target)
+        get_ocr_texts(target)
+        make_scrapbox_json(target)
+
+    make_total_scrapbox_json([filename_to_outdir(pdf_files)])
+
+
+
+def make_total_scrapbox_json(targets):
     total_pages = []
     data = {"pages": total_pages}
     for target in targets:
@@ -329,9 +380,14 @@ def process_pdfs():
     with open("total_scrapbox.json", 'w') as f:
         json.dump(data, f, indent=2)
 
+
+
 def main():
     if args.in_file:
         process_one_pdf(args.in_file)
+        return
+    if args.recovery:
+        recovery()
         return
 
     process_pdfs()
