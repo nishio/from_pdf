@@ -168,15 +168,20 @@ def quit_if_too_many_requests(res):
 
 def get_gyazo_info(image_id):
     GYAZO_API_ROOT = "https://api.gyazo.com/api"
-    res = requests.get(
-        f"{GYAZO_API_ROOT}/images/{image_id}",
-        headers={
-            "Authorization": f"Bearer {GYAZO_TOKEN}"
-        }
-    )
-    quit_if_too_many_requests(res)
+    while True:
+        res = requests.get(
+            f"{GYAZO_API_ROOT}/images/{image_id}",
+            headers={
+                "Authorization": f"Bearer {GYAZO_TOKEN}"
+            }
+        )
+        if res.status_code == 200:
+            return res.json()
+        if not args.retry:
+            raise Exception(f"Failed to upload image({res.status_code}): {res.text}")
+        quit_if_too_many_requests(res)
+        sleep(1)
 
-    return res.json()
 
 
 def get_ocr_texts(directory):
