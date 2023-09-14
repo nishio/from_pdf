@@ -18,6 +18,11 @@ parser.add_argument("--format", "-f", type=str, default='jpeg', choices=['jpeg',
 parser.add_argument("--in-dir", type=str, default="in", help="input PDF directory")
 parser.add_argument("--out-dir", type=str, default="out", help="output directory")
 parser.add_argument("--retry", action="store_true", help="retry")
+parser.add_argument("--skip-gyazo", action="store_true", help="Skip Gyazo Upload and OCR")
+parser.add_argument("--skip-gyazo-upload", action="store_true", help="Skip Gyazo Upload")
+parser.add_argument("--skip-pdf-to-image", action="store_true", help="Skip PDF to Image process")
+# Gyazo sometimes returns 429 error (Too many requests) for long time. In the case, we want to continue other processes first.
+
 args = parser.parse_args()
 
 
@@ -68,6 +73,9 @@ def upload_one_image_to_gyazo(image_name, directory):
             continue
         sleep(1)
 
+def get_images(directory):
+    return [f for f in os.listdir(directory) if f.endswith(f".jpg") or f.endswith(f".png")]
+
 
 def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
     """
@@ -83,7 +91,7 @@ def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
     None
     """
     # If already have images, skip
-    image_files = [f for f in os.listdir(output_directory) if f.endswith(f".jpg") or f.endswith(f".png")]
+    image_files = get_images(output_directory)
     if image_files:
         print(f"Skip the pdf because already have {len(image_files)} images.")
         return
@@ -119,7 +127,7 @@ def upload_images_to_gyazo(directory, ext="jpg"):
     None
     """
     # Get all image files in the directory
-    image_files = [f for f in os.listdir(directory) if f.endswith(f".{ext}")]
+    image_files = get_images(directory)
     print(f"DIR: {directory}, \nNum images: {len(image_files)}")
 
     # Local storage for Gyazo URLs
@@ -177,6 +185,11 @@ def get_ocr_texts(directory):
     with open(json_path) as f:
         gyazo_info = json.load(f)
 
+    image_files = get_images(directory)
+    if len(gyazo_info) != len(image_files):
+        print(f"Skip it because not uploaded all images.")
+        return
+
     for info in tqdm(gyazo_info):
         image_id = info["image_id"]
         res = get_gyazo_info(image_id)
@@ -186,6 +199,7 @@ def get_ocr_texts(directory):
                 json.dump(gyazo_info, f, indent=2)
         else:
             print(f"OCR not available for image_id={image_id}")
+            import pdb; pdb.set_trace()
 
 
 def get_out_dir(in_file):
@@ -221,19 +235,30 @@ def make_scrapbox_json(directory):
     """
     Read `gyazo_info.json` and make Scrapbox JSON.
     """
+    json_path = os.path.join(directory, "gyazo_info.json")
+    if not os.path.exists(json_path):
+        print(f"Skip it because gyazo_info.json not exists.")
+        return
+    with open(json_path) as f:
+        gyazo_info = json.load(f)
+
+
     print(f"Making Scrapbox JSON for {directory}...")
     title = os.path.split(directory)[-1]
 
-    json_path = os.path.join(directory, "gyazo_info.json")
-    with open(json_path) as f:
-        gyazo_info = json.load(f)
+    image_files = get_images(directory)
+    if len(gyazo_info) != len(image_files):
+        print(f"Skip it because not uploaded all images.")
+        return
+
 
     page_lines = [title, f"local_path: {directory}", ""]
 
     for page in gyazo_info:
         # "permalink_url"
         page_lines.append(f"[{page['permalink_url']}]")
-        page_lines.extend(page["ocr_text"].split("\n"))
+        if "ocr_text" in page:
+            page_lines.extend(page["ocr_text"].split("\n"))
         page_lines.append("")
 
     # Make the JSON
@@ -263,22 +288,21 @@ def main():
         print("# Convert PDF to images and Upload to Gyazo")
         for in_file in tqdm(pdf_files):
             out_dir = get_out_dir(in_file)
-            # if skip_existing and os.path.exists(out_dir):
-            #     print(f"Output directory `{out_dir}` already exists. Exiting...")
-            #     continue
-
             # Make the directory. The exist_ok=True ensures that the function doesn't
             # raise an error if the directory already exists.
             os.makedirs(out_dir, exist_ok=True)
 
-            print(f"From `{in_file}` to images...")
-            run_pdftocairo(in_file, out_dir, args.resolution, args.format)
+            if not args.skip_pdf_to_image:
+                print(f"From `{in_file}` to images...")
+                run_pdftocairo(in_file, out_dir, args.resolution, args.format)
             targets.append(out_dir)
-            upload_images_to_gyazo(out_dir)
+            if not (args.skip_gyazo or args.skip_gyazo_upload):
+                upload_images_to_gyazo(out_dir)
         
         print("# Get OCR texts")
-        for target in targets:
-            get_ocr_texts(target)
+        if not args.skip_gyazo:
+            for target in targets:
+                get_ocr_texts(target)
 
         print("# Make Scrapbox JSON")
         for target in targets:
@@ -289,6 +313,8 @@ def main():
         data = {"pages": total_pages}
         for target in targets:
             json_path = os.path.join(target, "scrapbox.json")
+            if not os.path.exists(json_path):
+                continue
             with open(json_path) as f:
                 pages = json.load(f)["pages"]
                 total_pages.extend(pages)

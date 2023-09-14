@@ -1,5 +1,7 @@
 venv
 in
 out
+out*
 .env
 total_scrapbox.json
+tmp.sh
