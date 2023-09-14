@@ -49,6 +49,7 @@ def upload_one_image_to_gyazo(image_name, directory):
             open(image_path, 'rb')
         )
     }
+    sleep_times = [60, 120, 300, 600, 1800, 3600]
     while True:
         response = requests.post(url, headers=headers, files=files)
 
@@ -56,6 +57,15 @@ def upload_one_image_to_gyazo(image_name, directory):
             return response.json()
         if not args.retry:
             raise Exception(f"Failed to upload image({response.status_code}): {response.text}")
+        if response.status_code == 429:
+            # (429): {"message":"You have fired too many requests. Please wait for some time."}
+            if sleep_times:
+                t = sleep_times.pop(0)
+            else:
+                t = 3600  # 1 hour
+            print(f"\nToo many requests. Wait for {t // 60} minute...")
+            sleep(t)
+            continue
         sleep(1)
 
 
