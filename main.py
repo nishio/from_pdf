@@ -63,6 +63,11 @@ def upload_one_image_to_gyazo(image_name, directory):
         if not args.retry:
             raise Exception(f"Failed to upload image({res.status_code}): {res.text}")
         quit_if_too_many_requests(res)
+        if res.text == "Not an Image":
+            # Not sure why this happens
+            # add this and tried again, but the error not happen again.
+            raise Exception(f"Not an Image: {image_path}")
+
 
         print(f"Failed to upload image({res.status_code}): {res.text}")
         print(f"Retry after 1 sec...")
