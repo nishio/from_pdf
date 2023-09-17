@@ -294,6 +294,7 @@ def make_scrapbox_json(directory):
         if len(page_lines) > 9000:
             add_page(page_lines)
             page_lines = [title, f"local_path: {directory}", ""]
+    add_page(page_lines)
 
     # Make the JSON
     scrapbox_json = {"pages": scrapbox_pages}
