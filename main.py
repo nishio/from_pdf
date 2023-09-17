@@ -64,7 +64,10 @@ def upload_one_image_to_gyazo(image_name, directory):
             raise Exception(f"Failed to upload image({res.status_code}): {res.text}")
         quit_if_too_many_requests(res)
 
+        print(f"Failed to upload image({res.status_code}): {res.text}")
+        print(f"Retry after 1 sec...")
         sleep(1)
+
 
 def get_images(directory):
     return [f for f in os.listdir(directory) if f.endswith(f".jpg") or f.endswith(f".png")]
@@ -368,7 +371,7 @@ def recovery():
         get_ocr_texts(target)
         make_scrapbox_json(target)
 
-    make_total_scrapbox_json([filename_to_outdir(pdf_files)])
+    make_total_scrapbox_json([filename_to_outdir(p) for p in pdf_files])
 
 
 
