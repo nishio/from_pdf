@@ -410,7 +410,7 @@ def make_total_scrapbox_json(targets):
         with open(json_path) as f:
             pages = json.load(f)["pages"]
             total_pages.extend(pages)
-    with open("total_scrapbox.json", 'w') as f:
+    with open(os.path.join(args.out_dir, "total_scrapbox.json"), 'w') as f:
         json.dump(data, f, indent=2)
 
 
