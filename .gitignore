@@ -1,7 +1,11 @@
 venv
 in
+in*
 out
 out*
+
 .env
 total_scrapbox.json
 tmp.sh
+
+.DS_Store
