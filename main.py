@@ -9,7 +9,7 @@ import requests
 import re
 import json
 from tqdm import tqdm
-from time import sleep
+from time import sleep, time
 
 parser = argparse.ArgumentParser(description="from PDF to Scrapbox")
 parser.add_argument("--in-file", "--in", "-i", type=str, help="input PDF file", required=False)
@@ -326,6 +326,8 @@ def process_pdfs():
     We need better way to handle PDFs that exceed the quota.(TODO)
     Because uploading cunsume all quota and we can't get OCR texts.
     """
+    # record start time
+    start_time = time()
     # Get all PDF files in the input directory
     pdf_files = get_pdfs_in_dir()
     print(f"Num PDF files: {len(pdf_files)}")
@@ -358,7 +360,9 @@ def process_pdfs():
     print("# Make Total Scrapbox JSON")
     make_total_scrapbox_json(targets)
 
-
+    # print elapsed time
+    elapsed_time = time() - start_time
+    print ("time: {0}".format(elapsed_time) + "[sec]")
 
 def recovery():
     """
