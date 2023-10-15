@@ -23,6 +23,7 @@ parser.add_argument("--skip-gyazo-upload", action="store_true", help="Skip Gyazo
 parser.add_argument("--skip-pdf-to-image", action="store_true", help="Skip PDF to Image process")
 # Gyazo sometimes returns 429 error (Too many requests) for long time. In the case, we want to continue other processes first.
 parser.add_argument("--recovery", action="store_true", help="Recovery mode after 429 error")
+parser.add_argument("--filter", action="store_true", help="filter PDFs that are alreadt processed")
 
 args = parser.parse_args()
 
@@ -56,22 +57,33 @@ def upload_one_image_to_gyazo(image_name, directory):
         )
     }
     while True:
-        res = requests.post(url, headers=headers, files=files)
+        try:
+            res = requests.post(url, headers=headers, files=files)
+        except Exception as e:
+            if not args.retry:
+                raise
+            print(f"Unknown Exception on uploading images: {e}")
+            print(f"Retry after 30 sec...")
+            sleep(30)
+            continue
 
         if res.status_code == 200:
             return res.json()
+        if res.status_code == 502 and "Please try again in 30 seconds" in res.text:
+            sleep(30)
+            continue
         if not args.retry:
             raise Exception(f"Failed to upload image({res.status_code}): {res.text}")
-        quit_if_too_many_requests(res)
-        if res.text == "Not an Image":
+        sleep_half_day_if_too_many_requests(res)
+        if "Not an Image" in res.text:
             # Not sure why this happens
             # add this and tried again, but the error not happen again.
             raise Exception(f"Not an Image: {image_path}")
 
 
-        print(f"Failed to upload image({res.status_code}): {res.text}")
-        print(f"Retry after 1 sec...")
-        sleep(1)
+        print(f"Unknown error({res.status_code}): {res.text}")
+        print(f"Retry after 30 sec...")
+        sleep(30)
 
 
 def get_images(directory):
@@ -166,12 +178,16 @@ def upload_images_to_gyazo(directory, ext="jpg"):
             json.dump(gyazo_info, f, indent=2)
 
 
-def quit_if_too_many_requests(res):
+# def quit_if_too_many_requests(res):
+#     if res.status_code == 429:
+#         # (429): {"message":"You have fired too many requests. Please wait for some time."}
+#         # Gyazo API Quota: 12500 API calls per day
+#         # Retrying won't help, so just quit.
+#         raise Exception(f"Too many requests")
+
+def sleep_half_day_if_too_many_requests(res):
     if res.status_code == 429:
-        # (429): {"message":"You have fired too many requests. Please wait for some time."}
-        # Gyazo API Quota: 12500 API calls per day
-        # Retrying won't help, so just quit.
-        raise Exception(f"Too many requests")
+        sleep(12 * 60 * 60)
 
 
 def get_gyazo_info(image_id):
@@ -187,7 +203,7 @@ def get_gyazo_info(image_id):
             return res.json()
         if not args.retry:
             raise Exception(f"Failed to upload image({res.status_code}): {res.text}")
-        quit_if_too_many_requests(res)
+        sleep_half_day_if_too_many_requests(res)
         sleep(1)
 
 
@@ -215,11 +231,14 @@ def get_ocr_texts(directory):
         if "ocr" in res:
             info["ocr_text"] = res["ocr"]["description"]
             with open(json_path, 'w') as f:
-                json.dump(gyazo_info, f, indent=2)
+                json.dump(gyazo_info, f, indent=2, ensure_ascii=False)
         else:
             print(f"OCR not available for image_id={image_id}")
             # should wait and retry?
-            raise Exception("OCR not available")
+            # raise Exception("OCR not available")
+            info["ocr_text"] = "OCR not available"
+            with open(json_path, 'w') as f:
+                json.dump(gyazo_info, f, indent=2, ensure_ascii=False)
 
 
 
@@ -367,6 +386,7 @@ def process_pdfs():
 def recovery():
     """
     Recovery after "too many requests" error.
+    Process "work in progress" PDFs only.
     """
     # Get all PDF files in the input directory
     pdf_files = get_pdfs_in_dir()
@@ -414,10 +434,38 @@ def make_total_scrapbox_json(targets):
         json.dump(data, f, indent=2)
 
 
+def filter():
+    """
+    filter PDFs that are alreadt processed
+    """
+    done_dir = args.in_dir + "_done"
+    os.makedirs(done_dir, exist_ok=True)
+
+    # Get all PDF files in the input directory
+    pdf_files = get_pdfs_in_dir()
+
+
+    # Process each PDF file
+    targets = []
+    for in_file in pdf_files:
+        target = filename_to_outdir(in_file)
+        scrapbox_json_path = os.path.join(target, "scrapbox.json")    
+        if os.path.exists(scrapbox_json_path):
+            print("✅", target)
+            targets.append(in_file)
+        else:
+            print("❌", target)
+
+    for in_file in targets:
+        out_file = done_dir + "/" + os.path.basename(in_file)
+        os.rename(in_file, out_file)
 
 def main():
     if args.in_file:
         process_one_pdf(args.in_file)
+        return
+    if args.filter:
+        filter()
         return
     if args.recovery:
         recovery()
