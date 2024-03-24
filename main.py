@@ -12,24 +12,49 @@ from tqdm import tqdm
 from time import sleep, time
 
 parser = argparse.ArgumentParser(description="from PDF to Scrapbox")
-parser.add_argument("--in-file", "--in", "-i", type=str, help="input PDF file", required=False)
-parser.add_argument("--resolution", "-r", type=int, default=200, help="Resolution for the output. Default is 200.")
-parser.add_argument("--format", "-f", type=str, default='jpeg', choices=['jpeg', 'png'], help="Output format. Default is 'jpeg'.")
+parser.add_argument(
+    "--in-file", "--in", "-i", type=str, help="input PDF file", required=False
+)
+parser.add_argument(
+    "--resolution",
+    "-r",
+    type=int,
+    default=200,
+    help="Resolution for the output. Default is 200.",
+)
+parser.add_argument(
+    "--format",
+    "-f",
+    type=str,
+    default="jpeg",
+    choices=["jpeg", "png"],
+    help="Output format. Default is 'jpeg'.",
+)
 parser.add_argument("--in-dir", type=str, default="in", help="input PDF directory")
 parser.add_argument("--out-dir", type=str, default="out", help="output directory")
 parser.add_argument("--retry", action="store_true", help="retry")
-parser.add_argument("--skip-gyazo", action="store_true", help="Skip Gyazo Upload and OCR")
-parser.add_argument("--skip-gyazo-upload", action="store_true", help="Skip Gyazo Upload")
-parser.add_argument("--skip-pdf-to-image", action="store_true", help="Skip PDF to Image process")
+parser.add_argument(
+    "--skip-gyazo", action="store_true", help="Skip Gyazo Upload and OCR"
+)
+parser.add_argument(
+    "--skip-gyazo-upload", action="store_true", help="Skip Gyazo Upload"
+)
+parser.add_argument(
+    "--skip-pdf-to-image", action="store_true", help="Skip PDF to Image process"
+)
 # Gyazo sometimes returns 429 error (Too many requests) for long time. In the case, we want to continue other processes first.
-parser.add_argument("--recovery", action="store_true", help="Recovery mode after 429 error")
-parser.add_argument("--filter", action="store_true", help="filter PDFs that are alreadt processed")
+parser.add_argument(
+    "--recovery", action="store_true", help="Recovery mode after 429 error"
+)
+parser.add_argument(
+    "--filter", action="store_true", help="filter PDFs that are alreadt processed"
+)
 
 args = parser.parse_args()
 
 
-
 import dotenv
+
 dotenv.load_dotenv()
 GYAZO_TOKEN = os.getenv("GYAZO_TOKEN")
 
@@ -37,7 +62,7 @@ GYAZO_TOKEN = os.getenv("GYAZO_TOKEN")
 def upload_one_image_to_gyazo(image_name, directory):
     """
     Uploads a single image to Gyazo.
-    
+
     Args:
     - image_name (str): The name of the image file to upload.
     - directory (str): The directory containing the image file.
@@ -45,17 +70,10 @@ def upload_one_image_to_gyazo(image_name, directory):
     Returns:
     - dict: The JSON object returned from the Gyazo API.
     """
-    url = 'https://upload.gyazo.com/api/upload'
-    headers = {
-        'Authorization': f'Bearer {GYAZO_TOKEN}'
-    }
+    url = "https://upload.gyazo.com/api/upload"
+    headers = {"Authorization": f"Bearer {GYAZO_TOKEN}"}
     image_path = os.path.join(directory, image_name)
-    files = {
-        'imagedata': (
-            image_name, 
-            open(image_path, 'rb')
-        )
-    }
+    files = {"imagedata": (image_name, open(image_path, "rb"))}
     while True:
         try:
             res = requests.post(url, headers=headers, files=files)
@@ -78,8 +96,11 @@ def upload_one_image_to_gyazo(image_name, directory):
         if "Not an Image" in res.text:
             # Not sure why this happens
             # add this and tried again, but the error not happen again.
-            raise Exception(f"Not an Image: {image_path}")
-
+            # raise Exception(f"Not an Image: {image_path}")
+            print(f"Not an Image: {image_path}")
+            print(f"Retry after 30 sec...")
+            sleep(30)
+            continue
 
         print(f"Unknown error({res.status_code}): {res.text}")
         print(f"Retry after 30 sec...")
@@ -87,19 +108,21 @@ def upload_one_image_to_gyazo(image_name, directory):
 
 
 def get_images(directory):
-    return [f for f in os.listdir(directory) if f.endswith(f".jpg") or f.endswith(f".png")]
+    return [
+        f for f in os.listdir(directory) if f.endswith(f".jpg") or f.endswith(f".png")
+    ]
 
 
-def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
+def run_pdftocairo(input_pdf, output_directory, resolution=200, format="jpeg"):
     """
     Runs pdftocairo on the given input PDF to convert it to specified format.
-    
+
     Args:
     - input_pdf (str): The path to the input PDF.
     - output_directory (str): The directory where the output should be saved.
     - resolution (int, optional): The resolution for the output. Default is 200.
     - format (str, optional): The output format ('jpeg', 'png', etc.). Default is 'jpeg'.
-    
+
     Returns:
     None
     """
@@ -118,24 +141,26 @@ def run_pdftocairo(input_pdf, output_directory, resolution=200, format='jpeg'):
 
     # Construct the pdftocairo command
     cmd = [
-        'pdftocairo',
-        '-r', str(resolution),
-        '-' + format,
+        "pdftocairo",
+        "-r",
+        str(resolution),
+        "-" + format,
         input_pdf,
-        os.path.join(output_directory, file_name_without_ext)
+        os.path.join(output_directory, file_name_without_ext),
     ]
 
     # Execute the command
     subprocess.run(cmd, check=True)
+    # If `Syntax Error: Document stream is empty` occured, possible reason is the PDF is on Dropbox and not offline mode
 
 
 def upload_images_to_gyazo(directory, ext="jpg"):
     """
     Uploads all images in the given directory to Gyazo.
-    
+
     Args:
     - directory (str): The directory containing the images to upload.
-    
+
     Returns:
     None
     """
@@ -150,14 +175,12 @@ def upload_images_to_gyazo(directory, ext="jpg"):
         print(f"Skip it because already uploaded all images.")
         return
 
-
     # 1: Sort the image files by index
     # Images may be `page-99.jpg` and `page-100.jpg`, so we need to sort by the page number.
     # Page number is continuous number before the last period.
 
     # Extract numbers to sort the images by index
-    image_files = sorted(image_files, key=lambda x: int(re.findall(r'(\d+)', x)[-1]))
-
+    image_files = sorted(image_files, key=lambda x: int(re.findall(r"(\d+)", x)[-1]))
 
     # 2: Upload each image to Gyazo
     # Each upload returns a JSON object with the URL to the uploaded image.
@@ -165,7 +188,7 @@ def upload_images_to_gyazo(directory, ext="jpg"):
     # Save after each API call so that we don't lose data if the script crashes.
 
     # Local storage for Gyazo URLs
-    not_uploaded_images = image_files[len(gyazo_info):]
+    not_uploaded_images = image_files[len(gyazo_info) :]
     for image_file in tqdm(not_uploaded_images):
         res = upload_one_image_to_gyazo(image_file, directory)
         res["local_filename"] = image_file
@@ -174,7 +197,7 @@ def upload_images_to_gyazo(directory, ext="jpg"):
         gyazo_info.append(res)
 
         # Save URLs to local JSON after each upload
-        with open(json_path, 'w') as f:
+        with open(json_path, "w") as f:
             json.dump(gyazo_info, f, indent=2)
 
 
@@ -185,8 +208,10 @@ def upload_images_to_gyazo(directory, ext="jpg"):
 #         # Retrying won't help, so just quit.
 #         raise Exception(f"Too many requests")
 
+
 def sleep_half_day_if_too_many_requests(res):
     if res.status_code == 429:
+        print("Too many requests. Sleep half day.")
         sleep(12 * 60 * 60)
 
 
@@ -195,9 +220,7 @@ def get_gyazo_info(image_id):
     while True:
         res = requests.get(
             f"{GYAZO_API_ROOT}/images/{image_id}",
-            headers={
-                "Authorization": f"Bearer {GYAZO_TOKEN}"
-            }
+            headers={"Authorization": f"Bearer {GYAZO_TOKEN}"},
         )
         if res.status_code == 200:
             return res.json()
@@ -205,7 +228,6 @@ def get_gyazo_info(image_id):
             raise Exception(f"Failed to upload image({res.status_code}): {res.text}")
         sleep_half_day_if_too_many_requests(res)
         sleep(1)
-
 
 
 def get_ocr_texts(directory):
@@ -230,23 +252,22 @@ def get_ocr_texts(directory):
         res = get_gyazo_info(image_id)
         if "ocr" in res:
             info["ocr_text"] = res["ocr"]["description"]
-            with open(json_path, 'w') as f:
+            with open(json_path, "w") as f:
                 json.dump(gyazo_info, f, indent=2, ensure_ascii=False)
         else:
             print(f"OCR not available for image_id={image_id}")
             # should wait and retry?
             # raise Exception("OCR not available")
             info["ocr_text"] = "OCR not available"
-            with open(json_path, 'w') as f:
+            with open(json_path, "w") as f:
                 json.dump(gyazo_info, f, indent=2, ensure_ascii=False)
-
 
 
 def filename_to_outdir(in_file):
     # Split the file path to get only the file name without extension
-    base_name = os.path.basename(in_file)      # gets "foo.pdf"
+    base_name = os.path.basename(in_file)  # gets "foo.pdf"
     file_name_without_ext = os.path.splitext(base_name)[0]  # gets "foo"
-    
+
     # Create the new directory path
     out_dir = os.path.join(args.out_dir, file_name_without_ext)
     return out_dir
@@ -266,9 +287,8 @@ def process_one_pdf(in_file):
     upload_images_to_gyazo(out_dir)
 
     get_ocr_texts(out_dir)  # may cause "no OCR" error
-    
-    make_scrapbox_json(out_dir)
 
+    make_scrapbox_json(out_dir)
 
 
 def make_scrapbox_json(directory):
@@ -281,7 +301,6 @@ def make_scrapbox_json(directory):
         return
     with open(json_path) as f:
         gyazo_info = json.load(f)
-
 
     print(f"Making Scrapbox JSON for {directory}...")
     title = os.path.split(directory)[-1]
@@ -296,16 +315,14 @@ def make_scrapbox_json(directory):
     # we need to split the pages.
     scrapbox_pages = []
     page_count = 1
+
     def add_page(page_lines):
         nonlocal page_count
         new_title = title
         if page_count > 1:
             new_title += f" ({page_count})"
         page_lines[0] = new_title
-        scrapbox_pages.append({
-            "title": new_title,
-            "lines": page_lines
-        })
+        scrapbox_pages.append({"title": new_title, "lines": page_lines})
         page_count += 1
 
     page_lines = [title, f"local_path: {directory}", ""]
@@ -325,14 +342,16 @@ def make_scrapbox_json(directory):
 
     # Save the JSON
     out_path = os.path.join(directory, "scrapbox.json")
-    with open(out_path, 'w') as f:
+    with open(out_path, "w") as f:
         json.dump(scrapbox_json, f, indent=2, ensure_ascii=False)
 
 
 def get_pdfs_in_dir():
     # Get all PDF files in the input directory
     INDIR = args.in_dir
-    pdf_files = [os.path.join(INDIR, f) for f in os.listdir(INDIR) if f.endswith(".pdf")]
+    pdf_files = [
+        os.path.join(INDIR, f) for f in os.listdir(INDIR) if f.endswith(".pdf")
+    ]
     pdf_files.sort()
     return pdf_files
 
@@ -366,7 +385,7 @@ def process_pdfs():
         targets.append(out_dir)
         if not (args.skip_gyazo or args.skip_gyazo_upload):
             upload_images_to_gyazo(out_dir)
-    
+
     print("# Get OCR texts")
     if not args.skip_gyazo:
         for target in targets:
@@ -381,7 +400,8 @@ def process_pdfs():
 
     # print elapsed time
     elapsed_time = time() - start_time
-    print ("time: {0}".format(elapsed_time) + "[sec]")
+    print("time: {0}".format(elapsed_time) + "[sec]")
+
 
 def recovery():
     """
@@ -419,7 +439,6 @@ def recovery():
     make_total_scrapbox_json([filename_to_outdir(p) for p in pdf_files])
 
 
-
 def make_total_scrapbox_json(targets):
     total_pages = []
     data = {"pages": total_pages}
@@ -430,7 +449,7 @@ def make_total_scrapbox_json(targets):
         with open(json_path) as f:
             pages = json.load(f)["pages"]
             total_pages.extend(pages)
-    with open(os.path.join(args.out_dir, "total_scrapbox.json"), 'w') as f:
+    with open(os.path.join(args.out_dir, "total_scrapbox.json"), "w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -444,12 +463,11 @@ def filter():
     # Get all PDF files in the input directory
     pdf_files = get_pdfs_in_dir()
 
-
     # Process each PDF file
     targets = []
     for in_file in pdf_files:
         target = filename_to_outdir(in_file)
-        scrapbox_json_path = os.path.join(target, "scrapbox.json")    
+        scrapbox_json_path = os.path.join(target, "scrapbox.json")
         if os.path.exists(scrapbox_json_path):
             print("✅", target)
             targets.append(in_file)
@@ -459,6 +477,7 @@ def filter():
     for in_file in targets:
         out_file = done_dir + "/" + os.path.basename(in_file)
         os.rename(in_file, out_file)
+
 
 def main():
     if args.in_file:
