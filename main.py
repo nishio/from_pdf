@@ -2,6 +2,7 @@
 from PDF to Scrapbox
 
 """
+
 import os
 import argparse
 import subprocess
@@ -129,7 +130,9 @@ def run_pdftocairo(input_pdf, output_directory, resolution=200, format="jpeg"):
     # If already have images, skip
     image_files = get_images(output_directory)
     if image_files:
-        print(f"Skip the pdf because already have {len(image_files)} images.")
+        print(
+            f"Skip run_pdftocairo for {input_pdf} because already have {len(image_files)} images."
+        )
         return
 
     # Extract the base name from the input PDF path
@@ -325,18 +328,20 @@ def make_scrapbox_json(directory):
         scrapbox_pages.append({"title": new_title, "lines": page_lines})
         page_count += 1
 
-    page_lines = [title, f"local_path: {directory}", ""]
+    page_lines = [title]
+    image_lines = []
 
-    for page in gyazo_info:
-        page_lines.append(f"[{page['permalink_url']}]")
+    for i, page in enumerate(gyazo_info):
+        image_lines.append(f"[{page['permalink_url']}]")  # add image
         if "ocr_text" in page:
-            page_lines.extend(page["ocr_text"].split("\n"))
-        page_lines.append("")
-        if len(page_lines) > 9000:
-            add_page(page_lines)
-            page_lines = [title, f"local_path: {directory}", ""]
-    add_page(page_lines)
+            page_lines.extend(page["ocr_text"].split("\n"))  # add text
+        if (i + 1) % 50 == 0:
+            add_page(page_lines + image_lines)
+            page_lines = [title]
+            image_lines = []
 
+    if page_lines != [title]:
+        add_page(page_lines + image_lines)
     # Make the JSON
     scrapbox_json = {"pages": scrapbox_pages}
 
