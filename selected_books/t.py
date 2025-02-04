@@ -1,6 +1,10 @@
 import os
 
 import json
+import tiktoken
+
+gpt4o = tiktoken.encoding_for_model("gpt-4o")  # <Encoding 'o200k_base'>
+gpt4 = tiktoken.encoding_for_model("gpt-4")  # <Encoding 'cl100k_base'>
 
 
 def collect_all_book_info():
@@ -47,6 +51,8 @@ def stat():
     print("num book", len(books))
     num_page = 0
     num_char = 0
+    num_token_gpt4o = 0
+    num_token_gpt4 = 0
     for book in books:
         with open(book["gyazo_info"]) as f:
             gyazo_info = json.load(f)
@@ -54,8 +60,12 @@ def stat():
         for page in gyazo_info:
             if "ocr_text" in page:
                 num_char += len(page["ocr_text"])
+                num_token_gpt4o += len(gpt4o.encode(page["ocr_text"]))
+                num_token_gpt4 += len(gpt4.encode(page["ocr_text"]))
     print("num page", num_page)
     print("num char", num_char)
+    print("num token gpt4o", num_token_gpt4o)
+    print("num token gpt4", num_token_gpt4)
 
 
 def select():
@@ -93,4 +103,23 @@ def select():
 
 
 # select()
-stat()
+# stat()
+
+
+def stat_intellitech():
+    pages = json.load(open("../out_intellitech/intellitech/gyazo_info.json"))
+    num_char = 0
+    num_token_gpt4o = 0
+    num_token_gpt4 = 0
+    for page in pages:
+        if "ocr_text" in page:
+            num_char += len(page["ocr_text"])
+            num_token_gpt4o += len(gpt4o.encode(page["ocr_text"]))
+            num_token_gpt4 += len(gpt4.encode(page["ocr_text"]))
+    print("num page", len(pages))
+    print("num char", num_char)
+    print("num token gpt4o", num_token_gpt4o)
+    print("num token gpt4", num_token_gpt4)
+
+
+stat_intellitech()
